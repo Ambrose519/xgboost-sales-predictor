@@ -1,0 +1,502 @@
+/* ===== XGBoost 销量预测 — 样式 ===== */
+
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --text: #1e293b;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.08);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+/* ===== Header ===== */
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+}
+
+/* ===== Steps ===== */
+.steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 24px;
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.step.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.step.done {
+    border-color: var(--success);
+    color: var(--success);
+    background: #f0fdf4;
+}
+
+.step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--border);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.step.active .step-num {
+    background: var(--primary);
+    color: white;
+}
+
+.step.done .step-num {
+    background: var(--success);
+    color: white;
+}
+
+.step-arrow {
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+}
+
+/* ===== Card ===== */
+.card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.card h2 {
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+}
+
+.desc {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+/* ===== Upload Zone ===== */
+.upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-text {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+}
+
+.upload-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+/* ===== File Info ===== */
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.file-icon {
+    font-size: 1.2rem;
+}
+
+/* ===== Divider ===== */
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border);
+}
+
+.divider span {
+    padding: 0 1rem;
+}
+
+/* ===== Buttons ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.7rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: var(--text);
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--border);
+    color: var(--text);
+}
+
+.btn-outline:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.25rem;
+}
+
+.btn-text:hover {
+    color: var(--danger);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ===== Progress ===== */
+.progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    color: var(--text-secondary);
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== Train Result ===== */
+.train-result {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: var(--radius);
+}
+
+.success-badge {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--success);
+    margin-bottom: 1rem;
+}
+
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.metric {
+    text-align: center;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.metric-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ===== Error ===== */
+.error-box {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 0.9rem;
+}
+
+/* ===== Model Info Bar ===== */
+.model-info-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+/* ===== Months Grid ===== */
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.month-input {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.month-input label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.month-input input {
+    padding: 0.65rem 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.15s;
+    outline: none;
+}
+
+.month-input input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ===== Action Bar ===== */
+.action-bar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ===== Result Card ===== */
+.result-card {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.prediction-values {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.pred-item {
+    text-align: center;
+    padding: 1.25rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+}
+
+.pred-item.highlight {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.pred-label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+
+.pred-value {
+    display: block;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.pred-summary {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.summary-item {
+    flex: 1;
+    text-align: center;
+    padding: 0.75rem;
+    background: #f0f9ff;
+    border-radius: 8px;
+    border: 1px solid #bae6fd;
+}
+
+.summary-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.summary-value {
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.chart-container {
+    width: 100%;
+    height: 350px;
+    margin-top: 1rem;
+}
+
+/* ===== Footer ===== */
+footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+    .container { padding: 1rem; }
+    .card { padding: 1.25rem; }
+    header h1 { font-size: 1.5rem; }
+    .prediction-values { grid-template-columns: 1fr; }
+    .months-grid { grid-template-columns: 1fr 1fr; }
+    .steps { gap: 0.25rem; }
+    .step { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+}

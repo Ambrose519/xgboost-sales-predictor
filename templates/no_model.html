@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型未就绪 — 极氪备件月度销量预测</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 极氪备件月度销量预测</h1>
+            <p class="subtitle">基于 XGBoost 滚动窗口交叉验证</p>
+        </header>
+
+        <main class="card" style="text-align:center; padding: 3rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🔧</div>
+            <h2>模型尚未加载</h2>
+            <p class="desc">预训练模型文件未找到，请先运行以下命令训练模型：</p>
+            <div style="background:#1e293b; color:#e2e8f0; padding:1rem; border-radius:8px; font-family:monospace; margin:1rem 0;">
+                python train_model.py
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                确保 model.pkl 文件存在于项目根目录中。
+            </p>
+        </main>
+
+        <footer>
+            <p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong></p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XGBoost 月度销量预测</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 XGBoost 月度销量预测</h1>
+            <p class="subtitle">基于历史数据训练 XGBoost 模型，预测未来 3 个月销量</p>
+        </header>
+
+        <div class="steps">
+            <div class="step active">
+                <span class="step-num">1</span>
+                <span class="step-label">上传训练数据</span>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step">
+                <span class="step-num">2</span>
+                <span class="step-label">输入近期销量</span>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step">
+                <span class="step-num">3</span>
+                <span class="step-label">查看预测结果</span>
+            </div>
+        </div>
+
+        <main class="card">
+            <h2>📁 上传历史销量数据</h2>
+            <p class="desc">请上传包含 <strong>48-60 个月</strong>历史月度销量的 CSV 或 Excel 文件。每行代表一个月的销量数据。</p>
+
+            <!-- 上传区域 -->
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📤</div>
+                <p class="upload-text">拖拽文件到此处，或点击选择文件</p>
+                <p class="upload-hint">支持 .csv、.xlsx、.xls 格式</p>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+                <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+                    选择文件
+                </button>
+            </div>
+
+            <div class="file-info" id="fileInfo" style="display:none;">
+                <span class="file-icon">📄</span>
+                <span id="fileName"></span>
+                <button class="btn-text" onclick="clearFile()">✕</button>
+            </div>
+
+            <!-- 或者使用演示数据 -->
+            <div class="divider"><span>或者</span></div>
+            <button class="btn btn-outline" onclick="useDemoData()" id="demoBtn">
+                🎲 使用演示数据（60 个月模拟销量）
+            </button>
+
+            <!-- 训练进度 -->
+            <div class="progress" id="progress" style="display:none;">
+                <div class="spinner"></div>
+                <span id="progressText">正在训练模型...</span>
+            </div>
+
+            <!-- 训练结果 -->
+            <div class="train-result" id="trainResult" style="display:none;">
+                <div class="success-badge">✅ 模型训练完成</div>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-value" id="rmse1">-</span>
+                        <span class="metric-label">RMSE (第1月)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="rmse2">-</span>
+                        <span class="metric-label">RMSE (第2月)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="rmse3">-</span>
+                        <span class="metric-label">RMSE (第3月)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="nFeatures">-</span>
+                        <span class="metric-label">特征数量</span>
+                    </div>
+                </div>
+                <a href="/predict" class="btn btn-primary">下一步：输入近期销量 →</a>
+            </div>
+
+            <!-- 错误信息 -->
+            <div class="error-box" id="errorBox" style="display:none;"></div>
+        </main>
+
+        <footer>
+            <p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong> · 滚动时间序列预测</p>
+        </footer>
+    </div>
+
+    <script>
+        // 拖拽上传
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+        });
+
+        function handleFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+                showError('仅支持 .csv、.xlsx、.xls 格式');
+                return;
+            }
+            document.getElementById('fileInfo').style.display = 'flex';
+            document.getElementById('fileName').textContent = file.name;
+            uploadFile(file);
+        }
+
+        function clearFile() {
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('trainResult').style.display = 'none';
+            fileInput.value = '';
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showProgress('正在上传并训练模型...');
+
+            fetch('/train', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    hideProgress();
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        showTrainResult(data);
+                    }
+                })
+                .catch(err => {
+                    hideProgress();
+                    showError('上传失败：' + err.message);
+                });
+        }
+
+        function useDemoData() {
+            showProgress('正在生成演示数据并训练模型...');
+            const btn = document.getElementById('demoBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 训练中...';
+
+            fetch('/api/demo-data')
+                .then(r => r.json())
+                .then(result => {
+                    // 将数据转为 CSV 并上传
+                    const csv = result.data.join('\n');
+                    const blob = new Blob([csv], {type: 'text/csv'});
+                    const file = new File([blob], 'demo_sales.csv', {type: 'text/csv'});
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    return fetch('/train', { method: 'POST', body: formData });
+                })
+                .then(r => r.json())
+                .then(data => {
+                    hideProgress();
+                    btn.disabled = false;
+                    btn.textContent = '🎲 使用演示数据（60 个月模拟销量）';
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        showTrainResult(data);
+                    }
+                })
+                .catch(err => {
+                    hideProgress();
+                    btn.disabled = false;
+                    btn.textContent = '🎲 使用演示数据（60 个月模拟销量）';
+                    showError('训练失败：' + err.message);
+                });
+        }
+
+        function showProgress(text) {
+            document.getElementById('progress').style.display = 'flex';
+            document.getElementById('progressText').textContent = text;
+            document.getElementById('trainResult').style.display = 'none';
+            document.getElementById('errorBox').style.display = 'none';
+        }
+
+        function hideProgress() {
+            document.getElementById('progress').style.display = 'none';
+        }
+
+        function showTrainResult(data) {
+            const info = data.train_info;
+            document.getElementById('trainResult').style.display = 'block';
+            document.getElementById('rmse1').textContent = info.rmse_1m.toFixed(2);
+            document.getElementById('rmse2').textContent = info.rmse_2m.toFixed(2);
+            document.getElementById('rmse3').textContent = info.rmse_3m.toFixed(2);
+            document.getElementById('nFeatures').textContent = info.features;
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('errorBox');
+            box.style.display = 'block';
+            box.textContent = '❌ ' + msg;
+        }
+    </script>
+</body>
+</html>
