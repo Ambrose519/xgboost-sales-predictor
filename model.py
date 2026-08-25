@@ -429,6 +429,66 @@ class SalesPredictor:
 
         return predictions
 
+    def predict_sku_batch(self, df_input):
+        """
+        批量 SKU 预测。
+
+        参数:
+            df_input: pandas DataFrame，每行一个 SKU
+                      格式: [SKU编码, SKU名称, 月1, 月2, ..., 月12]
+                      或: [SKU编码, 月1, 月2, ..., 月12]
+
+        返回:
+            pandas DataFrame: [SKU编码, SKU名称, 预测月1, 预测月2, 预测月3, 3月合计]
+        """
+        if not self.is_trained:
+            raise ValueError('模型尚未训练')
+
+        # 自动检测列数
+        n_cols = df_input.shape[1]
+        if n_cols == 13:
+            # [SKU编码, 月1-月12]
+            name_col = None
+        elif n_cols == 14:
+            # [SKU编码, SKU名称, 月1-月12]
+            name_col = df_input.columns[1]
+        elif n_cols >= 15:
+            # 多列信息列 + 12 个月数据
+            # 取最后 12 列作为月度数据
+            name_col = df_input.columns[1] if n_cols == 14 else None
+        else:
+            raise ValueError(f'数据格式错误：需要 13-14 列（当前 {n_cols} 列）')
+
+        # 提取月度数据列（最后 12 列）
+        month_cols = df_input.columns[-12:].tolist()
+        sku_col = df_input.columns[0]
+
+        results = []
+        for idx, row in df_input.iterrows():
+            months = pd.to_numeric(row[month_cols], errors='coerce').fillna(0).values
+
+            # 跳过全零的 SKU
+            if months.sum() == 0:
+                continue
+
+            try:
+                pred = self.predict(months)
+                result_row = {sku_col: row[sku_col]}
+                if name_col and name_col in df_input.columns:
+                    result_row[name_col] = row[name_col]
+                result_row['预测月1'] = pred['month_1']
+                result_row['预测月2'] = pred['month_2']
+                result_row['预测月3'] = pred['month_3']
+                result_row['3月合计'] = pred['total_3m']
+                results.append(result_row)
+            except Exception:
+                continue
+
+        if not results:
+            raise ValueError('没有有效的 SKU 数据可以预测')
+
+        return pd.DataFrame(results)
+
     def save(self, filepath):
         """保存模型到文件"""
         with open(filepath, 'wb') as f:
