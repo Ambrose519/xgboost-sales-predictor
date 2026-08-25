@@ -12,9 +12,28 @@ import pandas as pd
 import xgboost as xgb
 import pickle
 import os
-from sklearn.preprocessing import StandardScaler
 
 MODEL_DIR = os.path.dirname(__file__)
+
+
+class SimpleScaler:
+    """简易标准化器，替代 sklearn.preprocessing.SimpleScaler"""
+    def __init__(self):
+        self.mean_ = None
+        self.scale_ = None
+
+    def fit(self, X):
+        self.mean_ = np.mean(X, axis=0)
+        std = np.std(X, axis=0)
+        self.scale_ = np.where(std == 0, 1.0, std)
+        return self
+
+    def transform(self, X):
+        return (X - self.mean_) / self.scale_
+
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
 
 
 def build_features_from_series(series, n_lags=12):
@@ -233,7 +252,7 @@ class SalesPredictor:
             if len(X_train) < 5:
                 continue
 
-            scaler = StandardScaler()
+            scaler = SimpleScaler()
             X_train_s = scaler.fit_transform(X_train)
             X_val_s = scaler.transform(X_val)
 
@@ -289,7 +308,7 @@ class SalesPredictor:
             print()
             print(f'训练最终模型（全部 {total_rows} 个样本）...')
 
-        self.scaler = StandardScaler()
+        self.scaler = SimpleScaler()
         X_all_s = self.scaler.fit_transform(X_all)
 
         for label, y_all, model_list in [
