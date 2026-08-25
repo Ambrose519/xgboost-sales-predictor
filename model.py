@@ -36,13 +36,43 @@ class SimpleScaler:
         return self.transform(X)
 
 
-def build_features_from_series(series, n_lags=12):
+def compute_seasonal_profile(series):
+    """
+    计算一个 SKU 的季节性特征：每个月相对于平均值的比例。
+
+    参数:
+        series: 一维数组，按月排列的销量数据（至少 12 个月）
+
+    返回:
+        seasonal_ratios: 长度为 12 的数组，每个月的平均比例
+    """
+    n = len(series)
+    monthly_sums = np.zeros(12)
+    monthly_counts = np.zeros(12)
+
+    for i in range(n):
+        month_idx = i % 12
+        monthly_sums[month_idx] += series[i]
+        monthly_counts[month_idx] += 1
+
+    monthly_avg = np.where(monthly_counts > 0, monthly_sums / monthly_counts, 0)
+    overall_avg = np.mean(series[series > 0]) if np.any(series > 0) else 1.0
+
+    if overall_avg == 0:
+        overall_avg = 1.0
+
+    seasonal_ratios = monthly_avg / overall_avg
+    return seasonal_ratios
+
+
+def build_features_from_series(series, n_lags=12, seasonal_profile=None):
     """
     从一维时间序列构建监督学习特征矩阵。
 
     参数:
         series: 一维 list/array，按月排列的销量数据
         n_lags: 滞后阶数
+        seasonal_profile: 长度为 12 的季节性比率数组（可选）
 
     返回:
         X: 特征矩阵 (样本数, 特征数)
@@ -90,6 +120,11 @@ def build_features_from_series(series, n_lags=12):
         # 季度
         feats['quarter'] = ((month_idx - 1) // 3) + 1
 
+        # SKU 季节性特征（该 SKU 各月的历史平均占比）
+        if seasonal_profile is not None:
+            for m in range(12):
+                feats[f'seasonal_m{m+1}'] = float(seasonal_profile[m])
+
         # 目标值
         feats['target_1'] = series[i + 1]
         feats['target_2'] = series[i + 2]
@@ -108,12 +143,13 @@ def build_features_from_series(series, n_lags=12):
     return X, y1, y2, y3, feature_names
 
 
-def prepare_input_features(recent_12_months):
+def prepare_input_features(recent_12_months, seasonal_profile=None):
     """
     从最近 12 个月销量构建单个预测样本的特征向量。
 
     参数:
         recent_12_months: 长度为 12 的 list/array
+        seasonal_profile: 长度为 12 的季节性比率数组（可选）
 
     返回:
         features: 形状为 (1, n_features) 的 numpy array
@@ -141,6 +177,11 @@ def prepare_input_features(recent_12_months):
     feats['month_sin'] = float(np.sin(2 * np.pi * next_month_idx / 12))
     feats['month_cos'] = float(np.cos(2 * np.pi * next_month_idx / 12))
     feats['quarter'] = float(((next_month_idx - 1) // 3) + 1)
+
+    # SKU 季节性特征
+    if seasonal_profile is not None:
+        for m in range(12):
+            feats[f'seasonal_m{m+1}'] = float(seasonal_profile[m])
 
     return np.array([[feats[k] for k in sorted(feats.keys())]])
 
@@ -230,7 +271,12 @@ class SalesPredictor:
             if len(sales) < n_lags + forecast_horizon + 1:
                 continue
 
-            X, y1, y2, y3, feature_names = build_features_from_series(sales, n_lags)
+            # 计算该 SKU 的季节性特征
+            seasonal_profile = compute_seasonal_profile(sales)
+
+            X, y1, y2, y3, feature_names = build_features_from_series(
+                sales, n_lags, seasonal_profile=seasonal_profile
+            )
 
             if len(X) >= 5:
                 all_X.append(X)
@@ -532,12 +578,13 @@ class SalesPredictor:
 
         return self.training_summary
 
-    def predict(self, recent_12_months):
+    def predict(self, recent_12_months, seasonal_profile=None):
         """
         基于最近 12 个月销量预测未来 3 个月。
 
         参数:
             recent_12_months: 长度为 12 的 list/array
+            seasonal_profile: 长度为 12 的季节性比率数组（可选）
 
         返回:
             dict: {'month_1': float, 'month_2': float, 'month_3': float}
@@ -548,7 +595,7 @@ class SalesPredictor:
         if len(recent_12_months) != 12:
             raise ValueError(f'需要 12 个月数据，当前提供了 {len(recent_12_months)} 个')
 
-        X = prepare_input_features(recent_12_months)
+        X = prepare_input_features(recent_12_months, seasonal_profile=seasonal_profile)
         X_s = self.scaler.transform(X)
 
         pred_1 = max(0, float(self.model_1m.predict(X_s)[0]))
@@ -622,7 +669,9 @@ class SalesPredictor:
                 continue
 
             try:
-                pred = self.predict(months)
+                # 计算该 SKU 的季节性特征（从输入 12 个月估算）
+                seasonal_profile = compute_seasonal_profile(months)
+                pred = self.predict(months, seasonal_profile=seasonal_profile)
                 result_row = {sku_col: row[sku_col]}
                 if name_col and name_col in df_input.columns:
                     result_row[name_col] = row[name_col]
