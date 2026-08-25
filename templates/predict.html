@@ -13,13 +13,6 @@
             <p class="subtitle">上传全量 SKU 最近 12 个月销量文件，下载未来 3 个月预测结果</p>
         </header>
 
-        <div class="model-info-bar">
-            <span>训练 SKU: {{ model_info.total_skus }} 个</span>
-            <span>训练样本: {{ model_info.total_samples }}</span>
-            <span>特征数: {{ model_info.features }}</span>
-            <span>RMSE: {{ "%.0f"|format(model_info.final_rmse_1m) }} / {{ "%.0f"|format(model_info.final_rmse_2m) }} / {{ "%.0f"|format(model_info.final_rmse_3m) }}</span>
-        </div>
-
         <main class="card">
             <h2>上传 SKU 月度销量文件</h2>
             <p class="desc">
