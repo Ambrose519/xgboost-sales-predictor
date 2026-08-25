@@ -10,279 +10,197 @@
 <body>
     <div class="container">
         <header>
-            <h1>📊 极氪备件月度销量预测</h1>
-            <p class="subtitle">基于 XGBoost 滚动窗口交叉验证训练 · 输入最近 12 个月销量，预测未来 3 个月</p>
+            <h1>极氪备件月度销量预测</h1>
+            <p class="subtitle">基于 XGBoost 滚动窗口交叉验证训练 · 输入 12 个月销量，预测未来 3 个月</p>
         </header>
 
-        <!-- 模型信息栏 -->
         <div class="model-info-bar">
-            <span>📈 训练数据: {{ model_info.total_data_points }} 个月</span>
-            <span>🔬 CV 窗口: {{ model_info.cv_windows }} 个</span>
-            <span>📐 特征数: {{ model_info.features }}</span>
-            <span title="交叉验证平均RMSE">📏 CV RMSE: {{ "%.0f"|format(model_info.cv_rmse_1m_mean) }} / {{ "%.0f"|format(model_info.cv_rmse_2m_mean) }} / {{ "%.0f"|format(model_info.cv_rmse_3m_mean) }}</span>
+            <span>训练数据: {{ model_info.total_data_points }} 个月</span>
+            <span>CV 窗口: {{ model_info.cv_windows }} 个</span>
+            <span>特征数: {{ model_info.features }}</span>
+            <span>CV RMSE: {{ "%.0f"|format(model_info.cv_rmse_1m_mean) }} / {{ "%.0f"|format(model_info.cv_rmse_2m_mean) }} / {{ "%.0f"|format(model_info.cv_rmse_3m_mean) }}</span>
         </div>
 
-        <main class="card">
-            <h2>📝 输入最近 12 个月销量</h2>
-            <p class="desc">请按时间顺序输入最近连续 12 个月的月销量数据（从最早到最近）。系统将基于 XGBoost 模型预测未来 3 个月的销量。</p>
+        <!-- 标签切换 -->
+        <div class="tab-bar">
+            <button class="tab active" onclick="switchTab('single')">单个预测</button>
+            <button class="tab" onclick="switchTab('batch')">批量 SKU 预测</button>
+        </div>
 
-            <div class="months-grid" id="monthsGrid">
-                <!-- JS 动态生成 -->
-            </div>
-
-            <div class="action-bar">
-                <button class="btn btn-primary" onclick="runPrediction()" id="predictBtn">
-                    🔮 开始预测
-                </button>
-                <button class="btn btn-outline" onclick="fillDemo()">
-                    🎲 填充示例数据
-                </button>
-                <button class="btn btn-outline" onclick="clearAll()">
-                    🗑 清空
-                </button>
-            </div>
-
-            <div class="progress" id="progress" style="display:none;">
-                <div class="spinner"></div>
-                <span>正在预测...</span>
-            </div>
-
-            <div class="error-box" id="errorBox" style="display:none;"></div>
-        </main>
-
-        <!-- 预测结果 -->
-        <div class="card result-card" id="resultCard" style="display:none;">
-            <h2>📈 预测结果</h2>
-
-            <div class="prediction-values">
-                <div class="pred-item">
-                    <span class="pred-label">下月预测（+1月）</span>
-                    <span class="pred-value" id="pred1">-</span>
+        <!-- 单个预测 -->
+        <div class="tab-content" id="tab-single">
+            <main class="card">
+                <h2>输入最近 12 个月销量</h2>
+                <p class="desc">输入总量月度销量，预测未来 3 个月</p>
+                <div class="months-grid" id="monthsGrid"></div>
+                <div class="action-bar">
+                    <button class="btn btn-primary" onclick="runPrediction()" id="predictBtn">开始预测</button>
+                    <button class="btn btn-outline" onclick="fillDemo()">填充示例数据</button>
+                    <button class="btn btn-outline" onclick="clearAll()">清空</button>
                 </div>
-                <div class="pred-item highlight">
-                    <span class="pred-label">第 2 个月预测</span>
-                    <span class="pred-value" id="pred2">-</span>
+                <div class="progress" id="progress" style="display:none;"><div class="spinner"></div><span>正在预测...</span></div>
+                <div class="error-box" id="errorBox" style="display:none;"></div>
+            </main>
+            <div class="card result-card" id="resultCard" style="display:none;">
+                <h2>预测结果</h2>
+                <div class="prediction-values">
+                    <div class="pred-item"><span class="pred-label">下月预测</span><span class="pred-value" id="pred1">-</span></div>
+                    <div class="pred-item highlight"><span class="pred-label">第2个月</span><span class="pred-value" id="pred2">-</span></div>
+                    <div class="pred-item"><span class="pred-label">第3个月</span><span class="pred-value" id="pred3">-</span></div>
                 </div>
-                <div class="pred-item">
-                    <span class="pred-label">第 3 个月预测</span>
-                    <span class="pred-value" id="pred3">-</span>
+                <div class="pred-summary">
+                    <div class="summary-item"><span class="summary-label">3月合计</span><span class="summary-value" id="total3m">-</span></div>
+                    <div class="summary-item"><span class="summary-label">月均</span><span class="summary-value" id="avgMonthly">-</span></div>
+                    <div class="summary-item"><span class="summary-label">较上月变化</span><span class="summary-value" id="momChange">-</span></div>
                 </div>
-            </div>
-
-            <div class="pred-summary">
-                <div class="summary-item">
-                    <span class="summary-label">3 个月合计</span>
-                    <span class="summary-value" id="total3m">-</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">月均预测</span>
-                    <span class="summary-value" id="avgMonthly">-</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">较上月变化</span>
-                    <span class="summary-value" id="momChange">-</span>
-                </div>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="resultChart"></canvas>
+                <div class="chart-container"><canvas id="resultChart"></canvas></div>
             </div>
         </div>
 
-        <footer>
-            <p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong> · 滚动窗口交叉验证 · 极氪备件销量数据</p>
-        </footer>
+        <!-- 批量 SKU 预测 -->
+        <div class="tab-content" id="tab-batch" style="display:none;">
+            <main class="card">
+                <h2>上传 SKU 月度销量文件</h2>
+                <p class="desc">上传 Excel/CSV 文件，每行一个 SKU，包含 SKU 编码 + 最近 12 个月销量数据。<br>格式示例：<code>SKU编码 | SKU名称 | 月1 | 月2 | ... | 月12</code></p>
+                <div class="upload-zone" id="batchUploadZone">
+                    <div class="upload-icon">📤</div>
+                    <p class="upload-text">拖拽文件到此处，或点击选择文件</p>
+                    <p class="upload-hint">支持 .csv、.xlsx、.xls 格式</p>
+                    <input type="file" id="batchFileInput" accept=".csv,.xlsx,.xls" hidden>
+                    <button class="btn btn-secondary" onclick="document.getElementById('batchFileInput').click()">选择文件</button>
+                </div>
+                <div class="file-info" id="batchFileInfo" style="display:none;">
+                    <span class="file-icon">📄</span>
+                    <span id="batchFileName"></span>
+                    <button class="btn-text" onclick="clearBatchFile()">✕</button>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button class="btn btn-primary" onclick="submitBatch()" id="batchSubmitBtn">批量预测并下载结果</button>
+                </div>
+                <div class="progress" id="batchProgress" style="display:none;"><div class="spinner"></div><span id="batchProgressText">正在处理...</span></div>
+                <div class="error-box" id="batchErrorBox" style="display:none;"></div>
+            </main>
+        </div>
+
+        <footer><p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong> · 滚动窗口交叉验证 · 极氪备件销量数据</p></footer>
     </div>
 
     <script>
-        // 生成 12 个输入框
-        const grid = document.getElementById('monthsGrid');
-        const monthLabels = [
-            '第 1 月（最早）', '第 2 月', '第 3 月', '第 4 月',
-            '第 5 月', '第 6 月', '第 7 月', '第 8 月',
-            '第 9 月', '第 10 月', '第 11 月', '第 12 月（最近）'
-        ];
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelector('.tab[onclick*="' + tab + '"]').classList.add('active');
+            document.getElementById('tab-' + tab).style.display = 'block';
+        }
 
+        // -- Single prediction --
+        const grid = document.getElementById('monthsGrid');
+        const labels = ['第1月(最早)','第2月','第3月','第4月','第5月','第6月','第7月','第8月','第9月','第10月','第11月','第12月(最近)'];
         for (let i = 0; i < 12; i++) {
-            const div = document.createElement('div');
-            div.className = 'month-input';
-            div.innerHTML = `
-                <label>${monthLabels[i]}</label>
-                <input type="number" id="m${i}" placeholder="输入销量" step="1" min="0">
-            `;
-            grid.appendChild(div);
+            const d = document.createElement('div'); d.className = 'month-input';
+            d.innerHTML = '<label>' + labels[i] + '</label><input type="number" id="m' + i + '" placeholder="输入销量" step="1" min="0">';
+            grid.appendChild(d);
         }
 
         function fillDemo() {
-            // 使用最近12个月的实际数据作为示例（2025-08 ~ 2026-07）
-            const demoValues = [478638, 449084, 493292, 539219, 571743, 391462, 583381, 550324, 555363, 583052, 750210, 797648];
-            for (let i = 0; i < 12; i++) {
-                document.getElementById('m' + i).value = demoValues[i];
-            }
+            [478638,449084,493292,539219,571743,391462,583381,550324,555363,583052,750210,797648].forEach((v,i) => document.getElementById('m'+i).value = v);
         }
-
         function clearAll() {
-            for (let i = 0; i < 12; i++) {
-                document.getElementById('m' + i).value = '';
-                document.getElementById('m' + i).style.borderColor = '#ddd';
-            }
-            document.getElementById('resultCard').style.display = 'none';
-            document.getElementById('errorBox').style.display = 'none';
+            for(let i=0;i<12;i++) document.getElementById('m'+i).value = '';
+            document.getElementById('resultCard').style.display='none';
+            document.getElementById('errorBox').style.display='none';
         }
 
         function runPrediction() {
-            const months = [];
-            let allValid = true;
-            for (let i = 0; i < 12; i++) {
-                const val = parseFloat(document.getElementById('m' + i).value);
-                if (isNaN(val) || val < 0) {
-                    allValid = false;
-                    document.getElementById('m' + i).style.borderColor = '#e74c3c';
-                } else {
-                    document.getElementById('m' + i).style.borderColor = '#ddd';
-                    months.push(val);
-                }
+            const months = []; let ok = true;
+            for(let i=0;i<12;i++) {
+                const v = parseFloat(document.getElementById('m'+i).value);
+                if(isNaN(v)||v<0){ok=false;document.getElementById('m'+i).style.borderColor='#e74c3c';}
+                else {document.getElementById('m'+i).style.borderColor='#ddd';months.push(v);}
             }
-
-            if (!allValid) {
-                showError('请为所有 12 个月输入有效的非负数值');
-                return;
-            }
-
-            showProgress();
-            document.getElementById('resultCard').style.display = 'none';
-            document.getElementById('errorBox').style.display = 'none';
-
-            fetch('/api/forecast', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({months: months})
-            })
-            .then(r => r.json())
-            .then(data => {
-                hideProgress();
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    showResult(data.prediction, months);
-                }
-            })
-            .catch(err => {
-                hideProgress();
-                showError('预测失败：' + err.message);
-            });
+            if(!ok){showError('请填写所有12个月的有效数值');return;}
+            showProgress(true);
+            fetch('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({months})})
+            .then(r=>r.json()).then(d=>{showProgress(false);d.error?showError(d.error):showResult(d.prediction,months);})
+            .catch(e=>{showProgress(false);showError('预测失败:'+e.message);});
         }
 
         function showResult(pred, input) {
-            document.getElementById('resultCard').style.display = 'block';
-            document.getElementById('pred1').textContent = pred.month_1.toLocaleString();
-            document.getElementById('pred2').textContent = pred.month_2.toLocaleString();
-            document.getElementById('pred3').textContent = pred.month_3.toLocaleString();
-            document.getElementById('total3m').textContent = pred.total_3m.toLocaleString();
-            document.getElementById('avgMonthly').textContent = pred.avg_monthly.toLocaleString();
-
-            const lastMonth = input[input.length - 1];
-            const nextMonth = pred.month_1;
-            const pctChange = lastMonth > 0 ? ((nextMonth - lastMonth) / lastMonth * 100) : 0;
-            const arrow = pctChange >= 0 ? '↑' : '↓';
-            document.getElementById('momChange').textContent = `${arrow} ${Math.abs(pctChange).toFixed(1)}%`;
-
-            // 滚动到结果
-            document.getElementById('resultCard').scrollIntoView({behavior: 'smooth'});
-
-            // 绘制图表
-            drawChart(input, [pred.month_1, pred.month_2, pred.month_3]);
+            document.getElementById('resultCard').style.display='block';
+            document.getElementById('pred1').textContent=pred.month_1.toLocaleString();
+            document.getElementById('pred2').textContent=pred.month_2.toLocaleString();
+            document.getElementById('pred3').textContent=pred.month_3.toLocaleString();
+            document.getElementById('total3m').textContent=pred.total_3m.toLocaleString();
+            document.getElementById('avgMonthly').textContent=pred.avg_monthly.toLocaleString();
+            const ch = input[11]>0?((pred.month_1-input[11])/input[11]*100):0;
+            document.getElementById('momChange').textContent=(ch>=0?'↑':'↓')+' '+Math.abs(ch).toFixed(1)+'%';
+            document.getElementById('resultCard').scrollIntoView({behavior:'smooth'});
+            drawChart(input,[pred.month_1,pred.month_2,pred.month_3]);
         }
 
-        let chartInstance = null;
-
-        function drawChart(historical, predictions) {
-            const ctx = document.getElementById('resultChart').getContext('2d');
-
-            if (chartInstance) chartInstance.destroy();
-
-            const labels = [
-                ...Array.from({length: 12}, (_, i) => `历史-${i+1}月`),
-                '预测+1月', '预测+2月', '预测+3月'
-            ];
-
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: '历史销量',
-                            data: [...historical, null, null, null],
-                            borderColor: '#3498db',
-                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            borderWidth: 2
-                        },
-                        {
-                            label: '预测销量',
-                            data: [null, null, null, null, null, null, null, null, null, null, null, null, ...predictions],
-                            borderColor: '#e74c3c',
-                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                            borderDash: [6, 3],
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 5,
-                            pointHoverRadius: 7,
-                            pointBackgroundColor: '#e74c3c',
-                            borderWidth: 2
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: { usePointStyle: true, padding: 20, font: { size: 13 } }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}`
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            title: { display: true, text: '销量（个）', font: { size: 13 } },
-                            ticks: { callback: v => v.toLocaleString() }
-                        },
-                        x: {
-                            title: { display: true, text: '月份', font: { size: 13 } }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    }
-                }
-            });
+        let chartInstance=null;
+        function drawChart(hist, preds) {
+            const ctx=document.getElementById('resultChart').getContext('2d');
+            if(chartInstance)chartInstance.destroy();
+            const lbs=[...Array.from({length:12},(_,i)=>'历史-'+(i+1)+'月'),'预测+1月','预测+2月','预测+3月'];
+            chartInstance=new Chart(ctx,{type:'line',data:{labels:lbs,datasets:[
+                {label:'历史销量',data:[...hist,null,null,null],borderColor:'#3498db',backgroundColor:'rgba(52,152,219,0.1)',fill:true,tension:.3,pointRadius:4,borderWidth:2},
+                {label:'预测销量',data:[null,null,null,null,null,null,null,null,null,null,null,null,...preds],borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,0.1)',borderDash:[6,3],fill:true,tension:.3,pointRadius:5,pointBackgroundColor:'#e74c3c',borderWidth:2}
+            ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{usePointStyle:true}}},scales:{y:{ticks:{callback:v=>v.toLocaleString()}}},interaction:{intersect:false,mode:'index'}}});
         }
 
-        function showProgress() {
-            document.getElementById('progress').style.display = 'flex';
-            document.getElementById('predictBtn').disabled = true;
+        function showProgress(show) {
+            document.getElementById('progress').style.display=show?'flex':'none';
+            document.getElementById('predictBtn').disabled=show;
         }
-
-        function hideProgress() {
-            document.getElementById('progress').style.display = 'none';
-            document.getElementById('predictBtn').disabled = false;
-        }
-
         function showError(msg) {
-            const box = document.getElementById('errorBox');
-            box.style.display = 'block';
-            box.textContent = '❌ ' + msg;
+            document.getElementById('errorBox').style.display='block';
+            document.getElementById('errorBox').textContent='❌ '+msg;
+        }
+
+        // -- Batch prediction --
+        const bz = document.getElementById('batchUploadZone');
+        const bfi = document.getElementById('batchFileInput');
+        bz.addEventListener('dragover',e=>{e.preventDefault();bz.classList.add('dragover');});
+        bz.addEventListener('dragleave',()=>bz.classList.remove('dragover'));
+        bz.addEventListener('drop',e=>{e.preventDefault();bz.classList.remove('dragover');if(e.dataTransfer.files.length>0)handleBatchFile(e.dataTransfer.files[0]);});
+        bfi.addEventListener('change',()=>{if(bfi.files.length>0)handleBatchFile(bfi.files[0]);});
+
+        function handleBatchFile(file) {
+            document.getElementById('batchFileInfo').style.display='flex';
+            document.getElementById('batchFileName').textContent=file.name;
+            document.getElementById('batchErrorBox').style.display='none';
+        }
+        function clearBatchFile() {
+            document.getElementById('batchFileInfo').style.display='none';
+            bfi.value='';
+        }
+
+        function submitBatch() {
+            if(!bfi.files.length){document.getElementById('batchErrorBox').style.display='block';document.getElementById('batchErrorBox').textContent='❌ 请先选择文件';return;}
+            const fd = new FormData(); fd.append('file', bfi.files[0]);
+            document.getElementById('batchProgress').style.display='flex';
+            document.getElementById('batchProgressText').textContent='正在预测...';
+            document.getElementById('batchSubmitBtn').disabled=true;
+            fetch('/api/forecast/batch',{method:'POST',body:fd})
+            .then(r=>{
+                if(!r.ok) return r.json().then(d=>{throw new Error(d.error)});
+                return r.blob();
+            })
+            .then(blob=>{
+                document.getElementById('batchProgress').style.display='none';
+                document.getElementById('batchSubmitBtn').disabled=false;
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement('a');a.href=url;a.download='prediction_result.csv';a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(e=>{
+                document.getElementById('batchProgress').style.display='none';
+                document.getElementById('batchSubmitBtn').disabled=false;
+                document.getElementById('batchErrorBox').style.display='block';
+                document.getElementById('batchErrorBox').textContent='❌ '+e.message;
+            });
         }
     </script>
 </body>

@@ -1,11 +1,14 @@
 """
 XGBoost 月度销量预测 — Flask Web 应用
 预训练模型已内嵌，启动时自动加载，直接进入预测
+支持总量预测和 SKU 批量预测
 """
 import os
 import json
+import io
 import numpy as np
-from flask import Flask, render_template, request, jsonify
+import pandas as pd
+from flask import Flask, render_template, request, jsonify, send_file
 
 from model import SalesPredictor
 
@@ -101,6 +104,57 @@ def forecast_rolling():
             'predictions': predictions,
             'input': months[-12:]
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/forecast/batch', methods=['POST'])
+def forecast_batch():
+    """批量 SKU 预测 API：上传文件，返回预测结果下载"""
+    if not model_loaded:
+        return jsonify({'error': '模型未加载'}), 503
+
+    if 'file' not in request.files:
+        return jsonify({'error': '请上传文件'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '未选择文件'}), 400
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ['.csv', '.xlsx', '.xls']:
+        return jsonify({'error': '仅支持 CSV 或 Excel 文件'}), 400
+
+    try:
+        # 读取文件
+        if ext == '.csv':
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+
+        # 执行批量预测
+        result_df = predictor.predict_sku_batch(df)
+
+        # 生成输出文件
+        output = io.BytesIO()
+        if ext == '.csv':
+            result_df.to_csv(output, index=False, encoding='utf-8-sig')
+            mimetype = 'text/csv'
+            download_name = 'prediction_result.csv'
+        else:
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                result_df.to_excel(writer, index=False, sheet_name='预测结果')
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            download_name = 'prediction_result.xlsx'
+
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=download_name
+        )
+
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
