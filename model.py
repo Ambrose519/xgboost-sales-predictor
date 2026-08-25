@@ -160,7 +160,157 @@ class SalesPredictor:
         self.feature_importance = None
         self.training_summary = {}
 
-    def load_data_from_excel(self, file_path):
+    def load_data_from_excel_all_skus(self, file_path, min_months=24):
+        """
+        从 Excel 加载所有 SKU 的月度销量数据。
+
+        返回:
+            sku_data: list of (sku_code, sku_name, sales_array)
+            months: 月份标签列表
+        """
+        df = pd.read_excel(file_path, sheet_name=0, header=0)
+
+        # 找到月度列
+        month_cols = [c for c in df.columns if '（个）' in str(c) or
+                      (isinstance(c, str) and c[:4].isdigit() and len(c) >= 6)]
+        if not month_cols:
+            month_cols = df.columns[4:]
+
+        # 解析月份标签
+        months_raw = []
+        for c in month_cols:
+            m = str(c).replace('（个）', '').strip()
+            months_raw.append(m)
+
+        # 按时间排序
+        month_pairs = sorted(zip(months_raw, month_cols), key=lambda x: x[0])
+        months_sorted = [m for m, _ in month_pairs]
+        cols_sorted = [c for _, c in month_pairs]
+
+        # 提取每个 SKU 的数据
+        sku_data = []
+        code_col = df.columns[0]
+        name_col = df.columns[1]
+
+        for idx, row in df.iterrows():
+            sales = pd.to_numeric(row[cols_sorted], errors='coerce').fillna(0).values
+            # 跳过数据太少的 SKU
+            non_zero = np.count_nonzero(sales)
+            if non_zero < min_months:
+                continue
+            sku_data.append((
+                str(row[code_col]),
+                str(row[name_col]) if pd.notna(row[name_col]) else '',
+                sales.astype(float)
+            ))
+
+        print(f'加载 {len(sku_data)} 个 SKU，每个 {len(months_sorted)} 个月')
+        return sku_data, months_sorted
+
+    def train_sku_mixed(self, sku_data, n_lags=12, forecast_horizon=3, verbose=True):
+        """
+        混合训练：将所有 SKU 的数据合并训练一个 XGBoost 模型。
+
+        参数:
+            sku_data: list of (code, name, sales_array)
+            n_lags: 滞后特征数
+            forecast_horizon: 预测步数
+            verbose: 是否打印进度
+        """
+        all_X = []
+        all_y1 = []
+        all_y2 = []
+        all_y3 = []
+        sku_count = 0
+
+        if verbose:
+            print(f'混合训练：{len(sku_data)} 个 SKU，每个 {n_lags} 个月滞后')
+
+        for code, name, sales in sku_data:
+            if len(sales) < n_lags + forecast_horizon + 1:
+                continue
+
+            X, y1, y2, y3, feature_names = build_features_from_series(sales, n_lags)
+
+            if len(X) >= 5:
+                all_X.append(X)
+                all_y1.append(y1)
+                all_y2.append(y2)
+                all_y3.append(y3)
+                sku_count += 1
+
+        if sku_count == 0:
+            raise ValueError('没有足够的 SKU 数据用于训练')
+
+        X_all = np.vstack(all_X)
+        y1_all = np.concatenate(all_y1)
+        y2_all = np.concatenate(all_y2)
+        y3_all = np.concatenate(all_y3)
+        self.feature_names = feature_names
+
+        if verbose:
+            print(f'有效 SKU: {sku_count}')
+            print(f'总训练样本: {len(X_all)}')
+            print(f'特征数: {len(feature_names)}')
+
+        # 标准化
+        self.scaler = SimpleScaler()
+        X_all_s = self.scaler.fit_transform(X_all)
+
+        # 训练三个模型
+        for label, y_all in [('1m', y1_all), ('2m', y2_all), ('3m', y3_all)]:
+            model = xgb.XGBRegressor(
+                n_estimators=300,
+                max_depth=5,
+                learning_rate=0.05,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                reg_alpha=0.5,
+                reg_lambda=1.0,
+                random_state=42,
+                verbosity=0
+            )
+            model.fit(X_all_s, y_all)
+
+            preds = model.predict(X_all_s)
+            rmse = np.sqrt(np.mean((y_all - preds) ** 2))
+            self.train_rmse[label] = float(rmse)
+
+            if label == '1m':
+                self.model_1m = model
+            elif label == '2m':
+                self.model_2m = model
+            else:
+                self.model_3m = model
+
+        self.is_trained = True
+
+        # 特征重要性
+        importances = []
+        for m in [self.model_1m, self.model_2m, self.model_3m]:
+            importances.append(m.feature_importances_)
+        avg_importance = np.mean(importances, axis=0)
+        self.feature_importance = sorted(
+            zip(self.feature_names, [float(v) for v in avg_importance]),
+            key=lambda x: x[1], reverse=True
+        )
+
+        self.training_summary = {
+            'total_skus': int(sku_count),
+            'total_samples': int(len(X_all)),
+            'features': int(len(feature_names)),
+            'final_rmse_1m': float(self.train_rmse.get('1m', 0)),
+            'final_rmse_2m': float(self.train_rmse.get('2m', 0)),
+            'final_rmse_3m': float(self.train_rmse.get('3m', 0)),
+            'top_features': [(name, float(imp)) for name, imp in self.feature_importance[:5]]
+        }
+
+        if verbose:
+            print(f'训练完成!')
+            print(f'RMSE: 1m={self.train_rmse["1m"]:.0f}, 2m={self.train_rmse["2m"]:.0f}, 3m={self.train_rmse["3m"]:.0f}')
+            print(f'Top 5 特征: {[f[0] for f in self.feature_importance[:5]]}')
+
+        return self.training_summary
         """从 Excel 加载月度销量数据（汇总所有备件）"""
         df = pd.read_excel(file_path, sheet_name=0, header=0)
 
