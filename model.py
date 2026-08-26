@@ -663,6 +663,7 @@ class SalesPredictor:
         results = []
         for idx, row in df_input.iterrows():
             months = pd.to_numeric(row[month_cols], errors='coerce').fillna(0).values
+            months = months[::-1]  # 反转：月1=最近 → 最早→最近
 
             # 跳过全零的 SKU
             if months.sum() == 0:
