@@ -22,7 +22,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
 AUTH_USERNAME = 'zeekr_parts'
 AUTH_PASSWORD = '123456'
-AUTH_COOKIE = 'zp_auth_token'
+AUTH_COOKIE = 'zp_session_v2'
 
 
 def requires_auth(f):
@@ -77,7 +77,7 @@ def api_login():
     data = request.get_json()
     if data and data.get('username') == AUTH_USERNAME and data.get('password') == AUTH_PASSWORD:
         resp = make_response(jsonify({'success': True}))
-        resp.set_cookie(AUTH_COOKIE, AUTH_USERNAME, max_age=1800, httponly=True, samesite='Lax')
+        resp.set_cookie(AUTH_COOKIE, AUTH_USERNAME, httponly=True, samesite='Lax')
         return resp
     return jsonify({'success': False})
 
