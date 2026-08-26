@@ -206,6 +206,7 @@ class SalesPredictor:
         self.feature_importance = None
         self.training_summary = {}
         self.sku_seasonal_profiles = {}  # SKU编码 → 季节性profile(12,)
+        self.sku_calibration_factors = {}  # SKU编码 → 校准因子
 
     def load_data_from_excel_all_skus(self, file_path, min_months=24):
         """
@@ -339,6 +340,35 @@ class SalesPredictor:
                 self.model_3m = model
 
         self.is_trained = True
+
+        # 计算每个 SKU 的校准因子（修正混合模型的系统性偏差）
+        if verbose:
+            print()
+            print('计算 SKU 校准因子...')
+        for code, name, sales in sku_data:
+            if len(sales) < 12:
+                continue
+            # 用 SKU 最后 12 个月数据，让模型预测，算实际/预测比值
+            last_12 = sales[-12:]
+            actual_avg = np.mean(last_12[last_12 > 0]) if np.any(last_12 > 0) else np.mean(last_12)
+            if actual_avg <= 0:
+                continue
+            try:
+                sp = self.sku_seasonal_profiles.get(code, None)
+                # 最后一个月是训练数据结束月，预测下个月
+                last_data_month = (len(sales) % 12) or 12
+                first_pred_month = (last_data_month % 12) + 1
+                pred = self.predict(last_12, seasonal_profile=sp, first_pred_month=first_pred_month)
+                pred_avg = (pred['month_1'] + pred['month_2'] + pred['month_3']) / 3
+                if pred_avg > 0:
+                    factor = actual_avg / pred_avg
+                    factor = max(0.5, min(2.0, factor))  # 限制在 0.5~2.0 之间
+                    self.sku_calibration_factors[code] = float(factor)
+            except Exception:
+                pass
+
+        if verbose:
+            print(f'  计算了 {len(self.sku_calibration_factors)} 个 SKU 的校准因子')
 
         # 特征重要性
         importances = []
@@ -613,11 +643,11 @@ class SalesPredictor:
         pred_3 = max(0, float(self.model_3m.predict(X_s)[0]))
 
         return {
-            'month_1': round(pred_1, 2),
-            'month_2': round(pred_2, 2),
-            'month_3': round(pred_3, 2),
-            'total_3m': round(pred_1 + pred_2 + pred_3, 2),
-            'avg_monthly': round((pred_1 + pred_2 + pred_3) / 3, 2)
+            'month_1': round(pred_1),
+            'month_2': round(pred_2),
+            'month_3': round(pred_3),
+            'total_3m': round(pred_1 + pred_2 + pred_3),
+            'avg_monthly': round((pred_1 + pred_2 + pred_3) / 3)
         }
 
     def rolling_predict(self, recent_12_months, steps=3, seasonal_profile=None, first_pred_month=1):
@@ -638,7 +668,7 @@ class SalesPredictor:
             X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=pred_month)
             X_s = self.scaler.transform(X)
             pred = max(0, float(self.model_1m.predict(X_s)[0]))
-            predictions.append(round(pred, 2))
+            predictions.append(round(pred))
             window.append(pred)
 
         return predictions
@@ -695,13 +725,15 @@ class SalesPredictor:
                 if seasonal_profile is None:
                     seasonal_profile = compute_seasonal_profile(months)
                 pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
+                # 应用 SKU 校准因子
+                calib = self.sku_calibration_factors.get(sku_code, 1.0)
                 result_row = {sku_col: row[sku_col]}
                 if name_col and name_col in df_input.columns:
                     result_row[name_col] = row[name_col]
-                result_row['预测月1'] = pred['month_1']
-                result_row['预测月2'] = pred['month_2']
-                result_row['预测月3'] = pred['month_3']
-                result_row['3月合计'] = pred['total_3m']
+                result_row['预测月1'] = round(pred['month_1'] * calib)
+                result_row['预测月2'] = round(pred['month_2'] * calib)
+                result_row['预测月3'] = round(pred['month_3'] * calib)
+                result_row['3月合计'] = round(pred['total_3m'] * calib)
                 results.append(result_row)
             except Exception:
                 continue
@@ -725,7 +757,8 @@ class SalesPredictor:
                 'train_rmse': self.train_rmse,
                 'feature_importance': self.feature_importance,
                 'training_summary': self.training_summary,
-                'sku_seasonal_profiles': self.sku_seasonal_profiles
+                'sku_seasonal_profiles': self.sku_seasonal_profiles,
+                'sku_calibration_factors': self.sku_calibration_factors
             }, f)
 
     def load(self, filepath):
@@ -743,4 +776,5 @@ class SalesPredictor:
         self.feature_importance = data.get('feature_importance', None)
         self.training_summary = data.get('training_summary', {})
         self.sku_seasonal_profiles = data.get('sku_seasonal_profiles', {})
+        self.sku_calibration_factors = data.get('sku_calibration_factors', {})
         return self

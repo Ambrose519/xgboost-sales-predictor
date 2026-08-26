@@ -66,6 +66,9 @@ for idx, row in df.iterrows():
         if seasonal_profile is None:
             seasonal_profile = compute_seasonal_profile(months)
 
+        # SKU 校准因子
+        calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
+
         # 分块预测：每 3 个月一块，使用 3 个直接模型，减少滚动误差累积
         window = list(months)
         predictions = []
@@ -78,19 +81,19 @@ for idx, row in df.iterrows():
             X_s = predictor.scaler.transform(X)
 
             if chunk_size >= 1:
-                pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
-                predictions.append(round(pred, 2))
-                window.append(pred)
+                raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
+                predictions.append(round(raw_pred * calib))
+                window.append(raw_pred)  # 窗口用原始预测值，避免校准因子叠加
 
             if chunk_size >= 2:
-                pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
-                predictions.append(round(pred, 2))
-                window.append(pred)
+                raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
+                predictions.append(round(raw_pred * calib))
+                window.append(raw_pred)
 
             if chunk_size >= 3:
-                pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
-                predictions.append(round(pred, 2))
-                window.append(pred)
+                raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
+                predictions.append(round(raw_pred * calib))
+                window.append(raw_pred)
 
         result_row = {
             'SKU编码': sku_code,
