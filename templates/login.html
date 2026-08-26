@@ -13,7 +13,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+            background: #0a0e17;
             position: relative;
             overflow: hidden;
         }
@@ -21,29 +21,58 @@
         body::before {
             content: '';
             position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 25% 30%, rgba(37, 99, 235, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 75% 60%, rgba(37, 99, 235, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
+            z-index: 0;
+            animation: bgPulse 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        /* Subtle grid lines */
+        body::after {
+            content: '';
+            position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: url('https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=1920&q=80') center/cover no-repeat;
-            opacity: 0.25;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
             z-index: 0;
         }
 
         .login-container {
             position: relative;
             z-index: 1;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.97);
             border-radius: 20px;
             padding: 3rem 2.5rem;
             width: 400px;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.05);
             text-align: center;
         }
 
+        .login-container .logo {
+            font-size: 2.5rem;
+            font-weight: 200;
+            color: #1a1a2e;
+            letter-spacing: 4px;
+            margin-bottom: 0.25rem;
+        }
+
         .login-container h1 {
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             color: #1a1a2e;
             margin-bottom: 0.5rem;
             letter-spacing: 1px;
+            font-weight: 600;
         }
 
         .login-container .subtitle {
@@ -114,6 +143,7 @@
 </head>
 <body>
     <div class="login-container">
+        <div class="logo">ZEEKR</div>
         <h1>备件销量预测平台</h1>
         <p class="subtitle">SKU 月度销量智能预测</p>
 
