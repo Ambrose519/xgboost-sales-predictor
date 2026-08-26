@@ -21,30 +21,9 @@
         body::before {
             content: '';
             position: absolute;
-            top: -50%; left: -50%;
-            width: 200%; height: 200%;
-            background:
-                radial-gradient(circle at 25% 30%, rgba(37, 99, 235, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 75% 60%, rgba(37, 99, 235, 0.06) 0%, transparent 40%),
-                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
-            z-index: 0;
-            animation: bgPulse 8s ease-in-out infinite alternate;
-        }
-
-        @keyframes bgPulse {
-            0% { opacity: 0.8; }
-            100% { opacity: 1; }
-        }
-
-        /* Subtle grid lines */
-        body::after {
-            content: '';
-            position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-            background-size: 60px 60px;
+            background: url('https://zeekrlife-oss.zeekrlife.com/frontend/zeekrlife-official-pc/home/zeekr009.png?x-oss-process=image/format,webp') center/cover no-repeat;
+            opacity: 0.18;
             z-index: 0;
         }
 
