@@ -64,10 +64,7 @@ except Exception as e:
 
 @app.route('/')
 def login_page():
-    """登录页面"""
-    token = request.cookies.get(AUTH_COOKIE)
-    if token == AUTH_USERNAME:
-        return redirect(url_for('predict_page'))
+    """登录页面 - 始终显示"""
     return render_template('login.html')
 
 
