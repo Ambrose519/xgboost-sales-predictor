@@ -44,6 +44,9 @@ print('[3/4] 开始预测...')
 results = []
 total = len(df)
 
+# 预测月份映射：列表中的每个月份对应的实际日历月 (1-12)
+PRED_MONTH_CALENDAR = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6]  # 2026年9月=9, ..., 2027年6月=6
+
 for idx, row in df.iterrows():
     sku_code = str(row['SKU编码'])
     sku_name = str(row['SKU名称']) if pd.notna(row['SKU名称']) else ''
@@ -63,16 +66,31 @@ for idx, row in df.iterrows():
         if seasonal_profile is None:
             seasonal_profile = compute_seasonal_profile(months)
 
-        # 滚动预测 10 个月
+        # 分块预测：每 3 个月一块，使用 3 个直接模型，减少滚动误差累积
         window = list(months)
         predictions = []
 
-        for step in range(FORECAST_MONTHS):
-            X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, month_offset=step)
+        for chunk_start in range(0, FORECAST_MONTHS, 3):
+            chunk_size = min(3, FORECAST_MONTHS - chunk_start)
+            first_month = PRED_MONTH_CALENDAR[chunk_start]
+
+            X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=first_month)
             X_s = predictor.scaler.transform(X)
-            pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
-            predictions.append(round(pred, 2))
-            window.append(pred)
+
+            if chunk_size >= 1:
+                pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
+                predictions.append(round(pred, 2))
+                window.append(pred)
+
+            if chunk_size >= 2:
+                pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
+                predictions.append(round(pred, 2))
+                window.append(pred)
+
+            if chunk_size >= 3:
+                pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
+                predictions.append(round(pred, 2))
+                window.append(pred)
 
         result_row = {
             'SKU编码': sku_code,

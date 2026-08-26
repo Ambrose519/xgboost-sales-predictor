@@ -172,7 +172,8 @@ def forecast_batch():
             df = pd.read_excel(file)
 
         # 执行批量预测
-        result_df = predictor.predict_sku_batch(df)
+        first_pred_month = int(request.form.get('first_pred_month', 1))
+        result_df = predictor.predict_sku_batch(df, first_pred_month=first_pred_month)
 
         # 生成输出文件
         output = io.BytesIO()

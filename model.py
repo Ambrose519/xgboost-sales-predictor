@@ -143,14 +143,14 @@ def build_features_from_series(series, n_lags=12, seasonal_profile=None):
     return X, y1, y2, y3, feature_names
 
 
-def prepare_input_features(recent_12_months, seasonal_profile=None, month_offset=0):
+def prepare_input_features(recent_12_months, seasonal_profile=None, first_pred_month=1):
     """
     从最近 12 个月销量构建单个预测样本的特征向量。
 
     参数:
         recent_12_months: 长度为 12 的 list/array
         seasonal_profile: 长度为 12 的季节性比率数组（可选）
-        month_offset: 预测月份偏移（0=预测下个月, 1=预测下下个月, ...）
+        first_pred_month: 第一个预测目标月份的实际日历月 (1-12)
 
     返回:
         features: 形状为 (1, n_features) 的 numpy array
@@ -173,11 +173,11 @@ def prepare_input_features(recent_12_months, seasonal_profile=None, month_offset
     feats['mom_growth'] = float((series[-1] - series[-2]) / series[-2]) if series[-2] != 0 else 0.0
     feats['yoy_growth'] = 0.0  # 用户输入只有 12 个月，无法计算同比
 
-    # 月份特征（预测目标月份，随偏移递增）
-    next_month_idx = 13 + month_offset  # 预测的第 (1+month_offset) 个月
-    feats['month_sin'] = float(np.sin(2 * np.pi * next_month_idx / 12))
-    feats['month_cos'] = float(np.cos(2 * np.pi * next_month_idx / 12))
-    feats['quarter'] = float(((next_month_idx - 1) // 3) + 1)
+    # 月份特征（使用实际日历月）
+    month_idx = first_pred_month
+    feats['month_sin'] = float(np.sin(2 * np.pi * month_idx / 12))
+    feats['month_cos'] = float(np.cos(2 * np.pi * month_idx / 12))
+    feats['quarter'] = float(((month_idx - 1) // 3) + 1)
 
     # SKU 季节性特征
     if seasonal_profile is not None:
@@ -587,14 +587,14 @@ class SalesPredictor:
 
         return self.training_summary
 
-    def predict(self, recent_12_months, seasonal_profile=None, month_offset=0):
+    def predict(self, recent_12_months, seasonal_profile=None, first_pred_month=1):
         """
         基于最近 12 个月销量预测未来 3 个月。
 
         参数:
             recent_12_months: 长度为 12 的 list/array
             seasonal_profile: 长度为 12 的季节性比率数组（可选）
-            month_offset: 预测起始月份偏移（0=下个月开始, 1=下下个月开始, ...）
+            first_pred_month: 第一个预测目标月份的实际日历月 (1-12)
 
         返回:
             dict: {'month_1': float, 'month_2': float, 'month_3': float}
@@ -605,7 +605,7 @@ class SalesPredictor:
         if len(recent_12_months) != 12:
             raise ValueError(f'需要 12 个月数据，当前提供了 {len(recent_12_months)} 个')
 
-        X = prepare_input_features(recent_12_months, seasonal_profile=seasonal_profile, month_offset=month_offset)
+        X = prepare_input_features(recent_12_months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
         X_s = self.scaler.transform(X)
 
         pred_1 = max(0, float(self.model_1m.predict(X_s)[0]))
@@ -620,7 +620,7 @@ class SalesPredictor:
             'avg_monthly': round((pred_1 + pred_2 + pred_3) / 3, 2)
         }
 
-    def rolling_predict(self, recent_12_months, steps=3, seasonal_profile=None):
+    def rolling_predict(self, recent_12_months, steps=3, seasonal_profile=None, first_pred_month=1):
         """
         滚动预测：预测未来 N 个月，并将预测值纳入窗口继续预测。
 
@@ -628,12 +628,14 @@ class SalesPredictor:
             recent_12_months: 长度为 12 的 list/array
             steps: 预测步数
             seasonal_profile: 长度为 12 的季节性比率数组（可选）
+            first_pred_month: 第一个预测目标月份的实际日历月 (1-12)
         """
         window = list(recent_12_months)
         predictions = []
 
         for i in range(steps):
-            X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, month_offset=i)
+            pred_month = (first_pred_month + i - 1) % 12 + 1
+            X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=pred_month)
             X_s = self.scaler.transform(X)
             pred = max(0, float(self.model_1m.predict(X_s)[0]))
             predictions.append(round(pred, 2))
@@ -641,7 +643,7 @@ class SalesPredictor:
 
         return predictions
 
-    def predict_sku_batch(self, df_input):
+    def predict_sku_batch(self, df_input, first_pred_month=1):
         """
         批量 SKU 预测。
 
@@ -649,6 +651,7 @@ class SalesPredictor:
             df_input: pandas DataFrame，每行一个 SKU
                       格式: [SKU编码, SKU名称, 月1, 月2, ..., 月12]
                       或: [SKU编码, 月1, 月2, ..., 月12]
+            first_pred_month: 第一个预测目标月份的实际日历月 (1-12)
 
         返回:
             pandas DataFrame: [SKU编码, SKU名称, 预测月1, 预测月2, 预测月3, 3月合计]
@@ -691,7 +694,7 @@ class SalesPredictor:
                 # 如果训练数据中没有，用该 SKU 自己的 12 个月数据粗略估算
                 if seasonal_profile is None:
                     seasonal_profile = compute_seasonal_profile(months)
-                pred = self.predict(months, seasonal_profile=seasonal_profile)
+                pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
                 result_row = {sku_col: row[sku_col]}
                 if name_col and name_col in df_input.columns:
                     result_row[name_col] = row[name_col]
