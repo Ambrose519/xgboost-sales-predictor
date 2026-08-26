@@ -4,7 +4,7 @@
 import pandas as pd
 import numpy as np
 import os
-from model import SalesPredictor, compute_seasonal_profile, prepare_input_features
+from model import SalesPredictor, compute_seasonal_profile, prepare_input_features, dampen_spike_prediction
 
 # 输入输出路径
 INPUT_PATH = r"C:\Users\Jiayang.Liu1\Downloads\BI表_20260826_094319.xlsx"
@@ -82,16 +82,19 @@ for idx, row in df.iterrows():
 
             if chunk_size >= 1:
                 raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
+                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                 predictions.append(round(raw_pred * calib))
                 window.append(raw_pred)  # 窗口用原始预测值，避免校准因子叠加
 
             if chunk_size >= 2:
                 raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
+                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                 predictions.append(round(raw_pred * calib))
                 window.append(raw_pred)
 
             if chunk_size >= 3:
                 raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
+                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                 predictions.append(round(raw_pred * calib))
                 window.append(raw_pred)
 

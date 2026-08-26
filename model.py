@@ -191,6 +191,27 @@ def prepare_input_features(recent_12_months, seasonal_profile=None, first_pred_m
     return np.array([[feats[k] for k in sorted(feats.keys())]])
 
 
+def dampen_spike_prediction(pred, recent_12_months):
+    """
+    尖刺抑制：如果最近3个月销量突然暴涨，将预测向12月均值拉回。
+
+    参数:
+        pred: 原始预测值
+        recent_12_months: 最近12个月数据
+
+    返回:
+        调整后的预测值
+    """
+    months_arr = np.array(recent_12_months)
+    mean_12m = np.mean(months_arr)
+    mean_3m = np.mean(months_arr[-3:])
+    if mean_12m > 0 and mean_3m > mean_12m * 1.5:
+        ratio = mean_3m / mean_12m
+        blend = min(0.7, 1.0 / ratio)
+        return pred * (1 - blend) + mean_12m * blend
+    return pred
+
+
 class SalesPredictor:
     """XGBoost 销量预测器（滚动窗口交叉验证）"""
 
@@ -641,6 +662,11 @@ class SalesPredictor:
         pred_1 = max(0, float(self.model_1m.predict(X_s)[0]))
         pred_2 = max(0, float(self.model_2m.predict(X_s)[0]))
         pred_3 = max(0, float(self.model_3m.predict(X_s)[0]))
+
+        # 尖刺抑制
+        pred_1 = dampen_spike_prediction(pred_1, recent_12_months)
+        pred_2 = dampen_spike_prediction(pred_2, recent_12_months)
+        pred_3 = dampen_spike_prediction(pred_3, recent_12_months)
 
         return {
             'month_1': round(pred_1),
