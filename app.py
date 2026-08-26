@@ -8,13 +8,40 @@ import json
 import io
 import numpy as np
 import pandas as pd
-from flask import Flask, render_template, request, jsonify, send_file
+from functools import wraps
+from flask import Flask, render_template, request, jsonify, send_file, Response
 
 from model import SalesPredictor
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'zeekr-xgboost-predictor-2024')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
+# ==================== 身份验证 ====================
+
+AUTH_USERNAME = 'zeekr_parts'
+AUTH_PASSWORD = '123456'
+
+
+def check_auth(username, password):
+    return username == AUTH_USERNAME and password == AUTH_PASSWORD
+
+
+def authenticate():
+    return Response(
+        '请登录后访问', 401,
+        {'WWW-Authenticate': 'Basic realm="Login Required"'}
+    )
+
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 
 # ==================== 加载预训练模型 ====================
 
@@ -45,6 +72,7 @@ except Exception as e:
 # ==================== 页面路由 ====================
 
 @app.route('/')
+@requires_auth
 def index():
     """首页：直接进入预测"""
     if not model_loaded:
@@ -55,6 +83,7 @@ def index():
 # ==================== API 路由 ====================
 
 @app.route('/api/forecast', methods=['POST'])
+@requires_auth
 def forecast():
     """预测 API：接收 12 个月数据，返回预测结果"""
     if not model_loaded:
@@ -81,6 +110,7 @@ def forecast():
 
 
 @app.route('/api/forecast/rolling', methods=['POST'])
+@requires_auth
 def forecast_rolling():
     """滚动预测 API"""
     if not model_loaded:
@@ -109,6 +139,7 @@ def forecast_rolling():
 
 
 @app.route('/api/forecast/batch', methods=['POST'])
+@requires_auth
 def forecast_batch():
     """批量 SKU 预测 API：上传文件，返回预测结果下载"""
     if not model_loaded:
