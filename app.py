@@ -9,7 +9,7 @@ import io
 import numpy as np
 import pandas as pd
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
 
 from model import SalesPredictor
 
@@ -23,23 +23,11 @@ AUTH_USERNAME = 'zeekr_parts'
 AUTH_PASSWORD = '123456'
 
 
-def check_auth(username, password):
-    return username == AUTH_USERNAME and password == AUTH_PASSWORD
-
-
-def authenticate():
-    return Response(
-        '请登录后访问', 401,
-        {'WWW-Authenticate': 'Basic realm="Login Required"'}
-    )
-
-
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
+        if not session.get('logged_in'):
+            return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated
 
@@ -72,8 +60,26 @@ except Exception as e:
 # ==================== 页面路由 ====================
 
 @app.route('/')
+def login_page():
+    """登录页面"""
+    if session.get('logged_in'):
+        return redirect(url_for('predict_page'))
+    return render_template('login.html')
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """登录 API"""
+    data = request.get_json()
+    if data and data.get('username') == AUTH_USERNAME and data.get('password') == AUTH_PASSWORD:
+        session['logged_in'] = True
+        return jsonify({'success': True})
+    return jsonify({'success': False})
+
+
+@app.route('/predict')
 @requires_auth
-def index():
+def predict_page():
     """首页：直接进入预测"""
     if not model_loaded:
         return render_template('no_model.html')
