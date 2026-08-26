@@ -182,6 +182,10 @@ def prepare_input_features(recent_12_months, seasonal_profile=None):
     if seasonal_profile is not None:
         for m in range(12):
             feats[f'seasonal_m{m+1}'] = float(seasonal_profile[m])
+    else:
+        # 无季节性数据时，用训练数据均值（中性值）
+        for m in range(12):
+            feats[f'seasonal_m{m+1}'] = 0.5  # 默认中性值
 
     return np.array([[feats[k] for k in sorted(feats.keys())]])
 
@@ -670,8 +674,8 @@ class SalesPredictor:
                 continue
 
             try:
-                # 计算该 SKU 的季节性特征（从输入 12 个月估算）
-                seasonal_profile = compute_seasonal_profile(months)
+                # 12个月数据太短，季节性不可靠，用中性值
+                seasonal_profile = None
                 pred = self.predict(months, seasonal_profile=seasonal_profile)
                 result_row = {sku_col: row[sku_col]}
                 if name_col and name_col in df_input.columns:
