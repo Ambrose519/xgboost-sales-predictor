@@ -30,7 +30,7 @@ AUTH_PASSWORD = '123456'
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('logged_in'):
+        if not session.get('auth_user'):
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated
@@ -66,7 +66,7 @@ except Exception as e:
 @app.route('/')
 def login_page():
     """登录页面"""
-    if session.get('logged_in'):
+    if session.get('auth_user'):
         return redirect(url_for('predict_page'))
     return render_template('login.html')
 
@@ -76,7 +76,7 @@ def api_login():
     """登录 API"""
     data = request.get_json()
     if data and data.get('username') == AUTH_USERNAME and data.get('password') == AUTH_PASSWORD:
-        session['logged_in'] = True
+        session['auth_user'] = True
         session.permanent = True  # 30分钟后过期
         return jsonify({'success': True})
     return jsonify({'success': False})
