@@ -9,6 +9,7 @@ import io
 import numpy as np
 import pandas as pd
 from functools import wraps
+from datetime import timedelta
 from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
 
 from model import SalesPredictor
@@ -16,6 +17,9 @@ from model import SalesPredictor
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'zeekr-xgboost-predictor-2024')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # ==================== 身份验证 ====================
 
@@ -73,6 +77,7 @@ def api_login():
     data = request.get_json()
     if data and data.get('username') == AUTH_USERNAME and data.get('password') == AUTH_PASSWORD:
         session['logged_in'] = True
+        session.permanent = True  # 30分钟后过期
         return jsonify({'success': True})
     return jsonify({'success': False})
 
