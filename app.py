@@ -6,31 +6,30 @@ XGBoost 月度销量预测 — Flask Web 应用
 import os
 import json
 import io
+import secrets
 import numpy as np
 import pandas as pd
 from functools import wraps
-from datetime import timedelta
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for, make_response
 
 from model import SalesPredictor
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'zeekr-xgboost-predictor-2024')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # ==================== 身份验证 ====================
 
 AUTH_USERNAME = 'zeekr_parts'
 AUTH_PASSWORD = '123456'
+AUTH_COOKIE = 'zp_auth_token'
 
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('auth_user'):
+        token = request.cookies.get(AUTH_COOKIE)
+        if token != AUTH_USERNAME:
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated
@@ -66,7 +65,8 @@ except Exception as e:
 @app.route('/')
 def login_page():
     """登录页面"""
-    if session.get('auth_user'):
+    token = request.cookies.get(AUTH_COOKIE)
+    if token == AUTH_USERNAME:
         return redirect(url_for('predict_page'))
     return render_template('login.html')
 
@@ -76,9 +76,9 @@ def api_login():
     """登录 API"""
     data = request.get_json()
     if data and data.get('username') == AUTH_USERNAME and data.get('password') == AUTH_PASSWORD:
-        session['auth_user'] = True
-        session.permanent = True  # 30分钟后过期
-        return jsonify({'success': True})
+        resp = make_response(jsonify({'success': True}))
+        resp.set_cookie(AUTH_COOKIE, AUTH_USERNAME, max_age=1800, httponly=True, samesite='Lax')
+        return resp
     return jsonify({'success': False})
 
 
