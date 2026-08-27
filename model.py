@@ -36,17 +36,27 @@ class SimpleScaler:
         return self.transform(X)
 
 
-def compute_seasonal_profile(series):
+def compute_seasonal_profile(series, detrend_if_short=True):
     """
     计算一个 SKU 的季节性特征：每个月相对于平均值的比例。
 
     参数:
-        series: 一维数组，按月排列的销量数据（至少 12 个月）
+        series: 一维数组，按月排列的销量数据
+        detrend_if_short: 如果数据不足24个月，是否先去趋势再计算
 
     返回:
         seasonal_ratios: 长度为 12 的数组，每个月的平均比例
     """
     n = len(series)
+
+    # 少于24个月的数据，先去趋势再算季节性，避免趋势被误判为季节性
+    if n < 24 and detrend_if_short and n >= 12:
+        x = np.arange(n)
+        trend = np.polyfit(x, series, 1)
+        trend_line = np.polyval(trend, x)
+        detrended = series - trend_line + np.mean(series)
+        series = detrended
+
     monthly_sums = np.zeros(12)
     monthly_counts = np.zeros(12)
 
@@ -339,25 +349,19 @@ class SalesPredictor:
         self.scaler = SimpleScaler()
         X_all_s = self.scaler.fit_transform(X_all)
 
-        # 训练三个模型
-        for label, y_all in [('1m', y1_all), ('2m', y2_all), ('3m', y3_all)]:
-            model = xgb.XGBRegressor(
-                n_estimators=300,
-                max_depth=5,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.5,
-                reg_lambda=1.0,
-                random_state=42,
-                verbosity=0
-            )
-            model.fit(X_all_s, y_all)
+        # 训练三个独立模型
+        base_params = dict(
+            n_estimators=300, max_depth=5, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8,
+            reg_alpha=0.5, reg_lambda=1.0, random_state=42, verbosity=0
+        )
 
+        for label, y_all in [('1m', y1_all), ('2m', y2_all), ('3m', y3_all)]:
+            model = xgb.XGBRegressor(**base_params)
+            model.fit(X_all_s, y_all)
             preds = model.predict(X_all_s)
             rmse = np.sqrt(np.mean((y_all - preds) ** 2))
             self.train_rmse[label] = float(rmse)
-
             if label == '1m':
                 self.model_1m = model
             elif label == '2m':
@@ -388,7 +392,7 @@ class SalesPredictor:
                 pred_avg = (pred['month_1'] + pred['month_2'] + pred['month_3']) / 3
                 if pred_avg > 0:
                     factor = actual_avg / pred_avg
-                    factor = max(0.5, min(2.0, factor))  # 限制在 0.5~2.0 之间
+                    factor = max(0.67, min(1.5, factor))  # 限制在 0.67~1.5，避免极端修正
                     self.sku_calibration_factors[code] = float(factor)
             except Exception:
                 pass
@@ -396,13 +400,9 @@ class SalesPredictor:
         if verbose:
             print(f'  计算了 {len(self.sku_calibration_factors)} 个 SKU 的校准因子')
 
-        # 特征重要性
-        importances = []
-        for m in [self.model_1m, self.model_2m, self.model_3m]:
-            importances.append(m.feature_importances_)
-        avg_importance = np.mean(importances, axis=0)
+        # 特征重要性（取 model_1m 的，因为它只有基础特征，没有链式特征）
         self.feature_importance = sorted(
-            zip(self.feature_names, [float(v) for v in avg_importance]),
+            zip(self.feature_names, [float(v) for v in self.model_1m.feature_importances_]),
             key=lambda x: x[1], reverse=True
         )
 
@@ -664,9 +664,19 @@ class SalesPredictor:
         X = prepare_input_features(recent_12_months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
         X_s = self.scaler.transform(X)
 
-        pred_1 = max(0, float(self.model_1m.predict(X_s)[0]))
-        pred_2 = max(0, float(self.model_2m.predict(X_s)[0]))
-        pred_3 = max(0, float(self.model_3m.predict(X_s)[0]))
+        # 独立预测 + 近期均值融合，避免模型过度外推
+        raw_1 = max(0, float(self.model_1m.predict(X_s)[0]))
+        raw_2 = max(0, float(self.model_2m.predict(X_s)[0]))
+        raw_3 = max(0, float(self.model_3m.predict(X_s)[0]))
+
+        # 近期均值作为锚点，防止模型偏离太远
+        months_arr = np.array(recent_12_months)
+        anchor = np.mean(months_arr[-3:])  # 最近3个月均值
+
+        # 融合权重：模型70%，近期均值30%
+        pred_1 = raw_1 * 0.7 + anchor * 0.3
+        pred_2 = raw_2 * 0.7 + anchor * 0.3
+        pred_3 = raw_3 * 0.7 + anchor * 0.3
 
         # 尖刺抑制
         pred_1 = dampen_spike_prediction(pred_1, recent_12_months)
@@ -698,6 +708,7 @@ class SalesPredictor:
             pred_month = (first_pred_month + i - 1) % 12 + 1
             X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=pred_month)
             X_s = self.scaler.transform(X)
+            # 链式预测：只用 model_1m 做滚动
             pred = max(0, float(self.model_1m.predict(X_s)[0]))
             predictions.append(round(pred))
             window.append(pred)

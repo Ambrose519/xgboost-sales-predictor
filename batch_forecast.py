@@ -82,18 +82,25 @@ for idx, row in df.iterrows():
 
                 if chunk_size >= 1:
                     raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
+                    # 近期均值融合
+                    anchor = np.mean(window[-3:])
+                    raw_pred = raw_pred * 0.7 + anchor * 0.3
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
-                    window.append(raw_pred)  # 窗口用原始预测值，避免校准因子叠加
+                    window.append(raw_pred)
 
                 if chunk_size >= 2:
                     raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
+                    anchor = np.mean(window[-3:])
+                    raw_pred = raw_pred * 0.7 + anchor * 0.3
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
                     window.append(raw_pred)
 
                 if chunk_size >= 3:
                     raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
+                    anchor = np.mean(window[-3:])
+                    raw_pred = raw_pred * 0.7 + anchor * 0.3
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
                     window.append(raw_pred)
