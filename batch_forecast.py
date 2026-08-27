@@ -57,13 +57,20 @@ for idx, row in df.iterrows():
                 # 间歇性需求：Croston 方法
                 result_row[PRED_LABEL] = round(croston_forecast(months))
             elif recent_3m_avg <= 100:
-                # 中等需求：XGBoost
+                # 中等需求：XGBoost + 安全阀
                 seasonal_profile = predictor.sku_seasonal_profiles.get(sku_code, None)
+                calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
+                if calib < 0.8 and seasonal_profile is not None:
+                    seasonal_profile = None
                 if seasonal_profile is None:
                     seasonal_profile = compute_seasonal_profile(months)
                 pred = predictor.predict(months, seasonal_profile=seasonal_profile, first_pred_month=9)
-                calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
-                result_row[PRED_LABEL] = round(pred['month_1'] * calib)
+                xgb_result = round(pred['month_1'] * calib)
+                w_avg = months[-1] * 0.5 + months[-2] * 0.3 + months[-3] * 0.2
+                if abs(xgb_result - w_avg) / max(1, w_avg) > 0.3:
+                    result_row[PRED_LABEL] = round(w_avg)
+                else:
+                    result_row[PRED_LABEL] = xgb_result
             else:
                 # 高销量稳定需求：指数平滑 SES
                 result_row[PRED_LABEL] = round(ses_forecast(months))

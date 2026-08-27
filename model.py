@@ -830,14 +830,21 @@ class SalesPredictor:
                 # 间歇性需求：Croston 方法（文献最优，比 SES 误差低 15-30%）
                 result_row['预测月销量'] = round(croston_forecast(months))
             elif recent_3m_avg <= 100:
-                # 中等需求：XGBoost（Gradient Boosting 在此区间最优）
+                # 中等需求：XGBoost + 安全阀
                 try:
                     seasonal_profile = self.sku_seasonal_profiles.get(sku_code, None)
+                    calib = self.sku_calibration_factors.get(sku_code, 1.0)
+                    if calib < 0.8 and seasonal_profile is not None:
+                        seasonal_profile = None
                     if seasonal_profile is None:
                         seasonal_profile = compute_seasonal_profile(months)
                     pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
-                    calib = self.sku_calibration_factors.get(sku_code, 1.0)
-                    result_row['预测月销量'] = round(pred['month_1'] * calib)
+                    xgb_result = round(pred['month_1'] * calib)
+                    # 安全阀：XGBoost 偏离加权平均超 40% 则退回
+                    if abs(xgb_result - weighted_avg) / max(1, weighted_avg) > 0.3:
+                        result_row['预测月销量'] = round(weighted_avg)
+                    else:
+                        result_row['预测月销量'] = xgb_result
                 except Exception:
                     result_row['预测月销量'] = round(weighted_avg)
             else:
