@@ -55,48 +55,48 @@ for idx, row in df.iterrows():
     raw_months = pd.to_numeric(row[['月1','月2','月3','月4','月5','月6','月7','月8','月9','月10','月11','月12']], errors='coerce').fillna(0).values
     months = raw_months[::-1]  # 反转：最早→最近
 
-    # 跳过全零
-    if months.sum() == 0:
-        continue
-
     try:
-        # 从训练数据中匹配该 SKU 的季节性特征
-        seasonal_profile = predictor.sku_seasonal_profiles.get(sku_code, None)
-        # 如果训练数据中没有，用该 SKU 自己的 12 个月数据粗略估算
-        if seasonal_profile is None:
-            seasonal_profile = compute_seasonal_profile(months)
+        # 全零 SKU：直接输出全 0 预测
+        if months.sum() == 0:
+            predictions = [0] * FORECAST_MONTHS
+        else:
+            # 从训练数据中匹配该 SKU 的季节性特征
+            seasonal_profile = predictor.sku_seasonal_profiles.get(sku_code, None)
+            # 如果训练数据中没有，用该 SKU 自己的 12 个月数据粗略估算
+            if seasonal_profile is None:
+                seasonal_profile = compute_seasonal_profile(months)
 
-        # SKU 校准因子
-        calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
+            # SKU 校准因子
+            calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
 
-        # 分块预测：每 3 个月一块，使用 3 个直接模型，减少滚动误差累积
-        window = list(months)
-        predictions = []
+            # 分块预测：每 3 个月一块，使用 3 个直接模型，减少滚动误差累积
+            window = list(months)
+            predictions = []
 
-        for chunk_start in range(0, FORECAST_MONTHS, 3):
-            chunk_size = min(3, FORECAST_MONTHS - chunk_start)
-            first_month = PRED_MONTH_CALENDAR[chunk_start]
+            for chunk_start in range(0, FORECAST_MONTHS, 3):
+                chunk_size = min(3, FORECAST_MONTHS - chunk_start)
+                first_month = PRED_MONTH_CALENDAR[chunk_start]
 
-            X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=first_month)
-            X_s = predictor.scaler.transform(X)
+                X = prepare_input_features(window[-12:], seasonal_profile=seasonal_profile, first_pred_month=first_month)
+                X_s = predictor.scaler.transform(X)
 
-            if chunk_size >= 1:
-                raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
-                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
-                predictions.append(round(raw_pred * calib))
-                window.append(raw_pred)  # 窗口用原始预测值，避免校准因子叠加
+                if chunk_size >= 1:
+                    raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
+                    raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
+                    predictions.append(round(raw_pred * calib))
+                    window.append(raw_pred)  # 窗口用原始预测值，避免校准因子叠加
 
-            if chunk_size >= 2:
-                raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
-                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
-                predictions.append(round(raw_pred * calib))
-                window.append(raw_pred)
+                if chunk_size >= 2:
+                    raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
+                    raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
+                    predictions.append(round(raw_pred * calib))
+                    window.append(raw_pred)
 
-            if chunk_size >= 3:
-                raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
-                raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
-                predictions.append(round(raw_pred * calib))
-                window.append(raw_pred)
+                if chunk_size >= 3:
+                    raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
+                    raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
+                    predictions.append(round(raw_pred * calib))
+                    window.append(raw_pred)
 
         result_row = {
             'SKU编码': sku_code,
@@ -108,7 +108,14 @@ for idx, row in df.iterrows():
         results.append(result_row)
 
     except Exception as e:
-        pass
+        predictions = [0] * FORECAST_MONTHS
+        result_row = {
+            'SKU编码': sku_code,
+            'SKU名称': sku_name,
+        }
+        for i, label in enumerate(MONTH_LABELS):
+            result_row[label] = predictions[i]
+        results.append(result_row)
 
     if (idx + 1) % 5000 == 0:
         print(f'  进度: {idx + 1}/{total}')

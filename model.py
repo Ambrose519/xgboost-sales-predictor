@@ -744,33 +744,36 @@ class SalesPredictor:
             months = pd.to_numeric(row[month_cols], errors='coerce').fillna(0).values
             months = months[::-1]  # 反转：月1=最近 → 最早→最近
 
-            # 跳过全零的 SKU
+            sku_code = str(row[sku_col])
+            result_row = {sku_col: row[sku_col]}
+            if name_col and name_col in df_input.columns:
+                result_row[name_col] = row[name_col]
+
+            # 全零 SKU：输出全 0 预测
             if months.sum() == 0:
+                result_row['预测月1'] = 0
+                result_row['预测月2'] = 0
+                result_row['预测月3'] = 0
+                result_row['3月合计'] = 0
+                results.append(result_row)
                 continue
 
             try:
-                # 尝试从训练数据中匹配该 SKU 的季节性特征
-                sku_code = str(row[sku_col])
                 seasonal_profile = self.sku_seasonal_profiles.get(sku_code, None)
-                # 如果训练数据中没有，用该 SKU 自己的 12 个月数据粗略估算
                 if seasonal_profile is None:
                     seasonal_profile = compute_seasonal_profile(months)
                 pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
-                # 应用 SKU 校准因子
                 calib = self.sku_calibration_factors.get(sku_code, 1.0)
-                result_row = {sku_col: row[sku_col]}
-                if name_col and name_col in df_input.columns:
-                    result_row[name_col] = row[name_col]
                 result_row['预测月1'] = round(pred['month_1'] * calib)
                 result_row['预测月2'] = round(pred['month_2'] * calib)
                 result_row['预测月3'] = round(pred['month_3'] * calib)
                 result_row['3月合计'] = round(pred['total_3m'] * calib)
-                results.append(result_row)
             except Exception:
-                continue
-
-        if not results:
-            raise ValueError('没有有效的 SKU 数据可以预测')
+                result_row['预测月1'] = 0
+                result_row['预测月2'] = 0
+                result_row['预测月3'] = 0
+                result_row['3月合计'] = 0
+            results.append(result_row)
 
         return pd.DataFrame(results)
 
