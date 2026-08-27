@@ -82,9 +82,15 @@ for idx, row in df.iterrows():
 
                 if chunk_size >= 1:
                     raw_pred = max(0, float(predictor.model_1m.predict(X_s)[0]))
-                    # 近期均值融合
                     anchor = np.mean(window[-3:])
-                    raw_pred = raw_pred * 0.7 + anchor * 0.3
+                    mean_12m = np.mean(window[-12:])
+                    if mean_12m > 0:
+                        trend_strength = (anchor - mean_12m) / mean_12m
+                        model_weight = 0.7 + 0.2 * min(1.0, max(0, trend_strength))
+                        model_weight = min(0.9, model_weight)
+                    else:
+                        model_weight = 0.7
+                    raw_pred = raw_pred * model_weight + anchor * (1 - model_weight)
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
                     window.append(raw_pred)
@@ -92,7 +98,14 @@ for idx, row in df.iterrows():
                 if chunk_size >= 2:
                     raw_pred = max(0, float(predictor.model_2m.predict(X_s)[0]))
                     anchor = np.mean(window[-3:])
-                    raw_pred = raw_pred * 0.7 + anchor * 0.3
+                    mean_12m = np.mean(window[-12:])
+                    if mean_12m > 0:
+                        trend_strength = (anchor - mean_12m) / mean_12m
+                        model_weight = 0.7 + 0.2 * min(1.0, max(0, trend_strength))
+                        model_weight = min(0.9, model_weight)
+                    else:
+                        model_weight = 0.7
+                    raw_pred = raw_pred * model_weight + anchor * (1 - model_weight)
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
                     window.append(raw_pred)
@@ -100,7 +113,14 @@ for idx, row in df.iterrows():
                 if chunk_size >= 3:
                     raw_pred = max(0, float(predictor.model_3m.predict(X_s)[0]))
                     anchor = np.mean(window[-3:])
-                    raw_pred = raw_pred * 0.7 + anchor * 0.3
+                    mean_12m = np.mean(window[-12:])
+                    if mean_12m > 0:
+                        trend_strength = (anchor - mean_12m) / mean_12m
+                        model_weight = 0.7 + 0.2 * min(1.0, max(0, trend_strength))
+                        model_weight = min(0.9, model_weight)
+                    else:
+                        model_weight = 0.7
+                    raw_pred = raw_pred * model_weight + anchor * (1 - model_weight)
                     raw_pred = dampen_spike_prediction(raw_pred, window[-12:])
                     predictions.append(round(raw_pred * calib))
                     window.append(raw_pred)

@@ -206,23 +206,26 @@ def prepare_input_features(recent_12_months, seasonal_profile=None, first_pred_m
 
 def dampen_spike_prediction(pred, recent_12_months):
     """
-    尖刺抑制：如果最近3个月销量突然暴涨，将预测向12月均值拉回。
-
-    参数:
-        pred: 原始预测值
-        recent_12_months: 最近12个月数据
-
-    返回:
-        调整后的预测值
+    尖刺抑制：区分趋势性上涨和突发尖刺。
+    趋势性上涨（连续多个月高于均值）→ 不抑制
+    突发尖刺（只有1-2个月突然飙升）→ 向12月均值拉回
     """
     months_arr = np.array(recent_12_months)
     mean_12m = np.mean(months_arr)
     mean_3m = np.mean(months_arr[-3:])
-    if mean_12m > 0 and mean_3m > mean_12m * 1.5:
-        ratio = mean_3m / mean_12m
-        blend = min(0.7, 1.0 / ratio)
-        return pred * (1 - blend) + mean_12m * blend
-    return pred
+
+    if mean_12m <= 0 or mean_3m <= mean_12m * 1.5:
+        return pred  # 无需抑制
+
+    # 判断是趋势还是尖刺：最近3个月是否都高于12月均值
+    months_above_mean = np.sum(months_arr[-3:] > mean_12m)
+    if months_above_mean >= 3:
+        return pred  # 趋势性上涨，不抑制
+
+    # 突发尖刺，向均值拉回
+    ratio = mean_3m / mean_12m
+    blend = min(0.5, 1.0 / ratio)  # 最大拉回50%（比之前的70%温和）
+    return pred * (1 - blend) + mean_12m * blend
 
 
 class SalesPredictor:
@@ -664,19 +667,27 @@ class SalesPredictor:
         X = prepare_input_features(recent_12_months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
         X_s = self.scaler.transform(X)
 
-        # 独立预测 + 近期均值融合，避免模型过度外推
+        # 独立预测 + 动态权重融合
         raw_1 = max(0, float(self.model_1m.predict(X_s)[0]))
         raw_2 = max(0, float(self.model_2m.predict(X_s)[0]))
         raw_3 = max(0, float(self.model_3m.predict(X_s)[0]))
 
-        # 近期均值作为锚点，防止模型偏离太远
+        # 动态权重：趋势越强，模型权重越高（避免锚定效应拖低预测）
         months_arr = np.array(recent_12_months)
+        mean_12m = np.mean(months_arr)
+        mean_3m = np.mean(months_arr[-3:])
+        if mean_12m > 0:
+            trend_strength = (mean_3m - mean_12m) / mean_12m
+            model_weight = 0.7 + 0.2 * min(1.0, max(0, trend_strength))
+            model_weight = min(0.9, model_weight)  # 最高 90%
+        else:
+            model_weight = 0.7
+        anchor_weight = 1.0 - model_weight
         anchor = np.mean(months_arr[-3:])  # 最近3个月均值
 
-        # 融合权重：模型70%，近期均值30%
-        pred_1 = raw_1 * 0.7 + anchor * 0.3
-        pred_2 = raw_2 * 0.7 + anchor * 0.3
-        pred_3 = raw_3 * 0.7 + anchor * 0.3
+        pred_1 = raw_1 * model_weight + anchor * anchor_weight
+        pred_2 = raw_2 * model_weight + anchor * anchor_weight
+        pred_3 = raw_3 * model_weight + anchor * anchor_weight
 
         # 尖刺抑制
         pred_1 = dampen_spike_prediction(pred_1, recent_12_months)
