@@ -728,36 +728,29 @@ class SalesPredictor:
 
     def predict_sku_batch(self, df_input, first_pred_month=1):
         """
-        批量 SKU 预测。
+        批量 SKU 预测（1个月）。
+
+        策略：月均销量 50-100 的 SKU 用 XGBoost，其他用加权平均。
+        加权平均 = 月1*50% + 月2*30% + 月3*20%
 
         参数:
             df_input: pandas DataFrame，每行一个 SKU
-                      格式: [SKU编码, SKU名称, 月1, 月2, ..., 月12]
-                      或: [SKU编码, 月1, 月2, ..., 月12]
-            first_pred_month: 第一个预测目标月份的实际日历月 (1-12)
+            first_pred_month: 预测目标月份的实际日历月 (1-12)
 
         返回:
-            pandas DataFrame: [SKU编码, SKU名称, 预测月1, 预测月2, 预测月3, 3月合计]
+            pandas DataFrame: [SKU编码, SKU名称, 预测月销量]
         """
-        if not self.is_trained:
-            raise ValueError('模型尚未训练')
-
         # 自动检测列数
         n_cols = df_input.shape[1]
         if n_cols == 13:
-            # [SKU编码, 月1-月12]
             name_col = None
         elif n_cols == 14:
-            # [SKU编码, SKU名称, 月1-月12]
             name_col = df_input.columns[1]
         elif n_cols >= 15:
-            # 多列信息列 + 12 个月数据
-            # 取最后 12 列作为月度数据
             name_col = df_input.columns[1] if n_cols == 14 else None
         else:
             raise ValueError(f'数据格式错误：需要 13-14 列（当前 {n_cols} 列）')
 
-        # 提取月度数据列（最后 12 列）
         month_cols = df_input.columns[-12:].tolist()
         sku_col = df_input.columns[0]
 
@@ -771,30 +764,30 @@ class SalesPredictor:
             if name_col and name_col in df_input.columns:
                 result_row[name_col] = row[name_col]
 
-            # 全零 SKU：输出全 0 预测
+            # 全零 SKU
             if months.sum() == 0:
-                result_row['预测月1'] = 0
-                result_row['预测月2'] = 0
-                result_row['预测月3'] = 0
-                result_row['3月合计'] = 0
+                result_row['预测月销量'] = 0
                 results.append(result_row)
                 continue
 
-            try:
-                seasonal_profile = self.sku_seasonal_profiles.get(sku_code, None)
-                if seasonal_profile is None:
-                    seasonal_profile = compute_seasonal_profile(months)
-                pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
-                calib = self.sku_calibration_factors.get(sku_code, 1.0)
-                result_row['预测月1'] = round(pred['month_1'] * calib)
-                result_row['预测月2'] = round(pred['month_2'] * calib)
-                result_row['预测月3'] = round(pred['month_3'] * calib)
-                result_row['3月合计'] = round(pred['total_3m'] * calib)
-            except Exception:
-                result_row['预测月1'] = 0
-                result_row['预测月2'] = 0
-                result_row['预测月3'] = 0
-                result_row['3月合计'] = 0
+            # 加权平均 = 最近3个月加权
+            weighted_avg = months[-1] * 0.5 + months[-2] * 0.3 + months[-3] * 0.2
+            recent_3m_avg = np.mean(months[-3:])
+
+            # 月均 50-100：用 XGBoost；其他：用加权平均
+            if 50 <= recent_3m_avg <= 100 and self.is_trained:
+                try:
+                    seasonal_profile = self.sku_seasonal_profiles.get(sku_code, None)
+                    if seasonal_profile is None:
+                        seasonal_profile = compute_seasonal_profile(months)
+                    pred = self.predict(months, seasonal_profile=seasonal_profile, first_pred_month=first_pred_month)
+                    calib = self.sku_calibration_factors.get(sku_code, 1.0)
+                    result_row['预测月销量'] = round(pred['month_1'] * calib)
+                except Exception:
+                    result_row['预测月销量'] = round(weighted_avg)
+            else:
+                result_row['预测月销量'] = round(weighted_avg)
+
             results.append(result_row)
 
         return pd.DataFrame(results)

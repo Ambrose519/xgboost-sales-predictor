@@ -150,9 +150,6 @@ def forecast_rolling():
 @requires_auth
 def forecast_batch():
     """批量 SKU 预测 API：上传文件，返回预测结果下载"""
-    if not model_loaded:
-        return jsonify({'error': '模型未加载'}), 503
-
     if 'file' not in request.files:
         return jsonify({'error': '请上传文件'}), 400
 

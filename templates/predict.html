@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>极氪备件 SKU 月度销量预测</h1>
-            <p class="subtitle">上传全量 SKU 最近 12 个月销量文件，下载未来 3 个月预测结果</p>
+            <p class="subtitle">上传全量 SKU 最近 12 个月销量文件，下载未来 1 个月预测结果</p>
         </header>
 
         <main class="card">
@@ -18,7 +18,7 @@
             <p class="desc">
                 上传 Excel 或 CSV 文件，每行一个 SKU。文件格式：<br>
                 <code>SKU编码 | SKU名称 | 月1(最近) | 月2 | ... | 月12(最早)</code><br>
-                系统将预测每个 SKU 未来 3 个月销量。
+                系统将预测每个 SKU 未来 1 个月销量。
             </p>
 
             <div class="upload-zone" id="uploadZone">
@@ -60,7 +60,7 @@
         </main>
 
         <footer>
-            <p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong> · 混合训练 6,263 SKU · 季节性特征增强</p>
+            <p>Powered by <strong>XGBoost</strong> + <strong>Flask</strong> · 混合训练 20,490 SKU · 全量输出</p>
         </footer>
     </div>
 
