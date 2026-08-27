@@ -124,6 +124,9 @@ def build_features_from_series(series, n_lags=12, seasonal_profile=None):
         if seasonal_profile is not None:
             for m in range(12):
                 feats[f'seasonal_m{m+1}'] = float(seasonal_profile[m])
+        else:
+            for m in range(12):
+                feats[f'seasonal_m{m+1}'] = 0.5  # 中性值
 
         # 目标值
         feats['target_1'] = series[i + 1]
@@ -299,11 +302,13 @@ class SalesPredictor:
             if len(sales) < n_lags + forecast_horizon + 1:
                 continue
 
-            # 计算该 SKU 的季节性特征
-            seasonal_profile = compute_seasonal_profile(sales)
-
-            # 存储 SKU 的季节性 profile，供后续预测时匹配使用
-            self.sku_seasonal_profiles[code] = seasonal_profile
+            # 计算该 SKU 的季节性特征（至少需要 12 个非零月才可靠）
+            non_zero_count = np.count_nonzero(sales)
+            if non_zero_count >= 12:
+                seasonal_profile = compute_seasonal_profile(sales)
+                self.sku_seasonal_profiles[code] = seasonal_profile
+            else:
+                seasonal_profile = None
 
             X, y1, y2, y3, feature_names = build_features_from_series(
                 sales, n_lags, seasonal_profile=seasonal_profile
