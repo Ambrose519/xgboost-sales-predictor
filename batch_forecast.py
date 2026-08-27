@@ -5,7 +5,7 @@
 import pandas as pd
 import numpy as np
 import os
-from model import SalesPredictor, compute_seasonal_profile
+from model import SalesPredictor, compute_seasonal_profile, croston_forecast, ses_forecast
 
 # 输入输出路径
 INPUT_PATH = r"C:\Users\Jiayang.Liu1\Downloads\BI表_20260826_094319.xlsx"
@@ -51,12 +51,13 @@ for idx, row in df.iterrows():
         if months.sum() == 0:
             result_row[PRED_LABEL] = 0
         else:
-            # 加权平均 = 最近3个月加权
-            weighted_avg = months[-1] * 0.5 + months[-2] * 0.3 + months[-3] * 0.2
             recent_3m_avg = np.mean(months[-3:])
 
-            # 月均 50-100：用 XGBoost；其他：用加权平均
-            if 50 <= recent_3m_avg <= 100:
+            if recent_3m_avg < 50:
+                # 间歇性需求：Croston 方法
+                result_row[PRED_LABEL] = round(croston_forecast(months))
+            elif recent_3m_avg <= 100:
+                # 中等需求：XGBoost
                 seasonal_profile = predictor.sku_seasonal_profiles.get(sku_code, None)
                 if seasonal_profile is None:
                     seasonal_profile = compute_seasonal_profile(months)
@@ -64,7 +65,8 @@ for idx, row in df.iterrows():
                 calib = predictor.sku_calibration_factors.get(sku_code, 1.0)
                 result_row[PRED_LABEL] = round(pred['month_1'] * calib)
             else:
-                result_row[PRED_LABEL] = round(weighted_avg)
+                # 高销量稳定需求：指数平滑 SES
+                result_row[PRED_LABEL] = round(ses_forecast(months))
     except Exception:
         result_row[PRED_LABEL] = 0
 
